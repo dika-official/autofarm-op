@@ -4,59 +4,50 @@ game:GetService("Players").LocalPlayer.Idled:Connect(function()
     game:GetService("VirtualUser"):ClickButton2(Vector2.new())
 end)
 
-_G.speed = 250
+_G.speed = 230
 _G.run = false
 
 local plr = game.Players.LocalPlayer
 local TweenService = game:GetService("TweenService")
 
--- UI
+-- UI (SAMA AJA)
 local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
 local Frame = Instance.new("Frame", ScreenGui)
-Frame.Size = UDim2.new(0,250,0,260)
+Frame.Size = UDim2.new(0,250,0,200)
 Frame.Position = UDim2.new(0,20,0,200)
 Frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
 Frame.Active = true
 Frame.Draggable = true
 
--- RGB BORDER
 local UIStroke = Instance.new("UIStroke", Frame)
 UIStroke.Thickness = 2
-
 task.spawn(function()
     while task.wait() do
         UIStroke.Color = Color3.fromHSV((tick()%5)/5,1,1)
     end
 end)
 
--- TITLE
 local Title = Instance.new("TextLabel", Frame)
 Title.Size = UDim2.new(1,0,0,30)
-Title.Text = "AUTO FARM V5"
+Title.Text = "AUTO FARM V6"
 Title.TextColor3 = Color3.new(1,1,1)
 Title.BackgroundTransparency = 1
 
--- CLOSE
 local Close = Instance.new("TextButton", Frame)
 Close.Size = UDim2.new(0,30,0,30)
 Close.Position = UDim2.new(1,-35,0,0)
 Close.Text = "X"
-Close.BackgroundColor3 = Color3.fromRGB(150,0,0)
-Close.TextColor3 = Color3.new(1,1,1)
 
--- BUTTON
 local Button = Instance.new("TextButton", Frame)
 Button.Size = UDim2.new(1,0,0,50)
 Button.Position = UDim2.new(0,0,0,30)
-Button.Text = "START FARM"
+Button.Text = "START"
 
--- SPEED
 local SpeedBox = Instance.new("TextBox", Frame)
 SpeedBox.Size = UDim2.new(1,0,0,40)
 SpeedBox.Position = UDim2.new(0,0,0,90)
-SpeedBox.Text = "250"
+SpeedBox.Text = "230"
 
--- STATUS
 local Status = Instance.new("TextLabel", Frame)
 Status.Size = UDim2.new(1,0,0,30)
 Status.Position = UDim2.new(0,0,0,140)
@@ -85,40 +76,56 @@ local function tweenTo(car, cf, speed)
     tween.Completed:Wait()
 end
 
--- RAYCAST TANAH
-local function getGround(pos)
-    local ray = Ray.new(pos, Vector3.new(0,-500,0))
-    local part, hit = workspace:FindPartOnRay(ray)
-    return hit or pos
+-- SCAN AREA (DETEK SEMPIT / LUAS)
+local function scanArea(pos)
+    local ray1 = workspace:Raycast(pos, Vector3.new(5,0,0))
+    local ray2 = workspace:Raycast(pos, Vector3.new(-5,0,0))
+
+    if ray1 or ray2 then
+        return "sempit"
+    else
+        return "luas"
+    end
 end
 
--- ALIGN MOBIL
-local function alignCar(car, targetCF)
+-- AUTO PARKIR CERDAS
+local function smartPark(car, waypoint)
     local primary = car.PrimaryPart
-    local look = targetCF.LookVector
-    local newCF = CFrame.new(primary.Position, primary.Position + look)
-    car:PivotTo(newCF)
-end
+    local look = waypoint.LookVector
+    local pos = waypoint.Position
 
--- SMART DROP
-local function smartDrop(car, waypoint)
-    local primary = car.PrimaryPart
-    local ground = getGround(waypoint.Position)
+    local area = scanArea(pos)
 
-    local top = ground + Vector3.new(0,80,0)
-    local slow = ground + Vector3.new(0,10,0)
-    local final = CFrame.new(ground)
+    local backOffset
+    local forwardOffset
 
+    if area == "sempit" then
+        backOffset = pos - (look * 10)
+        forwardOffset = pos + (look * 2)
+    else
+        backOffset = pos - (look * 6)
+        forwardOffset = pos + (look * 4)
+    end
+
+    local top = backOffset + Vector3.new(0,80,0)
+
+    -- NAIK
     tweenTo(car, CFrame.new(top), _G.speed)
 
-    alignCar(car, waypoint)
+    -- ALIGN
+    car:PivotTo(CFrame.new(top, top + look))
 
-    tweenTo(car, CFrame.new(slow), 80)
-    tweenTo(car, final, 40)
+    -- TURUN PELAN
+    tweenTo(car, CFrame.new(backOffset + Vector3.new(0,5,0)), 80)
+    tweenTo(car, CFrame.new(backOffset), 50)
 
-    for i = 1,8 do
+    -- MAJU MASUK AREA 🔥
+    tweenTo(car, CFrame.new(forwardOffset, forwardOffset + look), 60)
+
+    -- NEMPEL TANAH
+    for i = 1,6 do
         task.wait(0.1)
-        car:PivotTo(car.PrimaryPart.CFrame - Vector3.new(0,1.5,0))
+        car:PivotTo(car.PrimaryPart.CFrame - Vector3.new(0,1,0))
     end
 
     task.wait(2)
@@ -158,7 +165,7 @@ local function autofarm()
             if hum.SeatPart ~= nil then
                 workspace.Gravity = 0
 
-                smartDrop(car, workspace.Etc.Waypoint.Waypoint.CFrame)
+                smartPark(car, workspace.Etc.Waypoint.Waypoint.CFrame)
 
                 workspace.Gravity = 196
             end
@@ -169,7 +176,7 @@ end
 -- BUTTON
 Button.MouseButton1Click:Connect(function()
     _G.run = not _G.run
-    _G.speed = tonumber(SpeedBox.Text) or 250
+    _G.speed = tonumber(SpeedBox.Text) or 230
 
     if _G.run then
         Button.Text = "STOP"
