@@ -137,7 +137,7 @@ TabFarm:CreateToggle({
                               end)
                           until hum.SeatPart ~= nil
                           
-                      -- JIKA SUDAH DUDUK DI TRUK (FIX MANTUL)
+                      -- JIKA SUDAH DUDUK DI TRUK
                       elseif hum.SeatPart ~= nil then
                           local car = hum.SeatPart.Parent
                           local primary = car.PrimaryPart
@@ -150,56 +150,65 @@ TabFarm:CreateToggle({
                           tv.Value = car:GetPrimaryPartCFrame()
                           tv.Changed:Connect(function() car:PivotTo(tv.Value) end)
                           
-                          -- Simpan rotasi asli truk supaya tidak miring pas teleport
-                          local currentRot = primary.CFrame.Rotation
-                          
-                          -- 1. Terbang Ke Atas
-                          local UpTween = ts:Create(tv, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {Value = CFrame.new(primary.Position + Vector3.new(0, 1000, 0)) * currentRot})
+                          -- 1. Terbang Ke Atas (Di tempat sekarang)
+                          local UpTween = ts:Create(tv, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {Value = primary.CFrame + Vector3.new(0, 1000, 0)})
                           UpTween:Play()
                           UpTween.Completed:Wait()
                           
-                          -- 2. Terbang Mendatar ke Tujuan
+                          -- 2. Terbang Mendatar ke Tujuan (Mengikuti arah rotasi Waypoint)
                           local dist = (primary.Position - target.Position).Magnitude
                           local fastTime = math.clamp(dist / 650, 0.5, 8) 
                           
                           tv.Value = car:GetPrimaryPartCFrame()
-                          local MainTween = ts:Create(tv, TweenInfo.new(fastTime, Enum.EasingStyle.Linear), {Value = CFrame.new(target.Position + Vector3.new(0, 1000, 0)) * currentRot})
+                          local MainTween = ts:Create(tv, TweenInfo.new(fastTime, Enum.EasingStyle.Linear), {Value = target.CFrame + Vector3.new(0, 1000, 0)})
                           MainTween:Play()
                           MainTween.Completed:Wait()
                           
-                          -- 3. Turun ke Posisi Waypoint (Diberi jarak aman 15 stud di atas tanah)
+                          -- 3. Turun ke Posisi Waypoint (Jarak aman 15 stud)
                           tv.Value = car:GetPrimaryPartCFrame()
-                          local DownTween = ts:Create(tv, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {Value = CFrame.new(target.Position + Vector3.new(0, 15, 0)) * currentRot})
+                          local DownTween = ts:Create(tv, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {Value = target.CFrame + Vector3.new(0, 15, 0)})
                           DownTween:Play()
                           DownTween.Completed:Wait()
                           
-                          -- 4. Setel Gravitasi agar jatuh secara natural
+                          -- 4. Aktifkan Gravitasi agar nyentuh aspal
                           workspace.Gravity = 196
-                          
-                          -- Matikan kecepatan biar truknya nggak glosor/tergelincir
                           for _, v in pairs(car:GetDescendants()) do
                               if v:IsA("BasePart") then
-                                  v.Velocity = Vector3.new(0, 0, 0)
+                                  v.Velocity = Vector3.new(0, -10, 0)
                                   v.RotVelocity = Vector3.new(0, 0, 0)
                               end
                           end
                           
-                          -- 5. Menunggu Waypoint Berpindah (Tanpa PivotTo paksa yang bikin mental)
+                          -- 5. Menunggu Waypoint Berpindah (Sistem Wiggle/Goyang)
                           local stuckTimer = tick()
+                          local wiggleStep = 0
+                          
                           repeat task.wait(0.2)
-                              -- Hentikan pergerakan terus menerus saat menunggu
-                              for _, v in pairs(car:GetDescendants()) do
-                                  if v:IsA("BasePart") then
-                                      v.Velocity = Vector3.new(0, 0, 0)
-                                  end
-                              end
-                              
-                              -- Failsafe: Jika 5 detik belum dapat uang, turunkan sedikit pakai Tween secara perlahan
-                              if target.Position == prepos and (tick() - stuckTimer) > 5 then
+                              -- Failsafe: Jika 2.5 detik belum dapat uang, lakukan pergerakan ke titik trigger
+                              if target.Position == prepos and (tick() - stuckTimer) > 2.5 then
+                                  workspace.Gravity = 0
                                   tv.Value = car:GetPrimaryPartCFrame()
-                                  local AdjustTween = ts:Create(tv, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {Value = CFrame.new(target.Position + Vector3.new(0, 5, 0)) * currentRot})
+                                  local nextCFrame
+                                  
+                                  if wiggleStep == 0 then
+                                      -- Geser maju 15 stud
+                                      nextCFrame = target.CFrame * CFrame.new(0, 0, 15)
+                                      wiggleStep = 1
+                                  elseif wiggleStep == 1 then
+                                      -- Geser agak turun ke bawah (berjaga-jaga hitbox di bawah tanah)
+                                      nextCFrame = target.CFrame - Vector3.new(0, 5, 0)
+                                      wiggleStep = 2
+                                  else
+                                      -- Kembali ke tengah atas
+                                      nextCFrame = target.CFrame + Vector3.new(0, 15, 0)
+                                      wiggleStep = 0
+                                  end
+                                  
+                                  local AdjustTween = ts:Create(tv, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {Value = nextCFrame})
                                   AdjustTween:Play()
                                   AdjustTween.Completed:Wait()
+                                  
+                                  workspace.Gravity = 196
                                   stuckTimer = tick()
                               end
                           until target.Position ~= prepos or not _G.AutoTrucker
@@ -235,7 +244,7 @@ TabTele:CreateDropdown({
 
 Rayfield:Notify({
    Title = "DIKA CDID Siap!",
-   Content = "Fisika truk saat turun sudah distabilkan.",
+   Content = "Auto Trucker sudah dilengkapi sistem penyelarasan lokasi.",
    Duration = 5,
    Image = 4483362458,
 })
