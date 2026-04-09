@@ -4,10 +4,11 @@ game:GetService("Players").LocalPlayer.Idled:Connect(function()
     game:GetService("VirtualUser"):ClickButton2(Vector2.new())
 end)
 
-_G.speed = 300
+_G.speed = 250
 _G.run = false
 
 local plr = game.Players.LocalPlayer
+local TweenService = game:GetService("TweenService")
 
 -- UI
 local ScreenGui = Instance.new("ScreenGui", game.CoreGui)
@@ -31,7 +32,7 @@ end)
 -- TITLE
 local Title = Instance.new("TextLabel", Frame)
 Title.Size = UDim2.new(1,0,0,30)
-Title.Text = "AUTO FARM V4"
+Title.Text = "AUTO FARM V5"
 Title.TextColor3 = Color3.new(1,1,1)
 Title.BackgroundTransparency = 1
 
@@ -43,7 +44,7 @@ Close.Text = "X"
 Close.BackgroundColor3 = Color3.fromRGB(150,0,0)
 Close.TextColor3 = Color3.new(1,1,1)
 
--- BUTTON FARM
+-- BUTTON
 local Button = Instance.new("TextButton", Frame)
 Button.Size = UDim2.new(1,0,0,50)
 Button.Position = UDim2.new(0,0,0,30)
@@ -53,50 +54,74 @@ Button.Text = "START FARM"
 local SpeedBox = Instance.new("TextBox", Frame)
 SpeedBox.Size = UDim2.new(1,0,0,40)
 SpeedBox.Position = UDim2.new(0,0,0,90)
-SpeedBox.Text = "300"
-
--- TELEPORT DEALER
-local TP = Instance.new("TextButton", Frame)
-TP.Size = UDim2.new(1,0,0,40)
-TP.Position = UDim2.new(0,0,0,140)
-TP.Text = "Teleport Dealer"
-
--- RESET
-local Reset = Instance.new("TextButton", Frame)
-Reset.Size = UDim2.new(1,0,0,40)
-Reset.Position = UDim2.new(0,0,0,190)
-Reset.Text = "Reset Character"
+SpeedBox.Text = "250"
 
 -- STATUS
 local Status = Instance.new("TextLabel", Frame)
 Status.Size = UDim2.new(1,0,0,30)
-Status.Position = UDim2.new(0,0,0,230)
+Status.Position = UDim2.new(0,0,0,140)
 Status.Text = "Status: OFF"
 Status.BackgroundTransparency = 1
 Status.TextColor3 = Color3.new(1,1,1)
 
 -- TWEEN
-local TweenService = game:GetService("TweenService")
-
 local function tweenTo(car, cf, speed)
     local primary = car.PrimaryPart
     local dist = (primary.Position - cf.Position).Magnitude
 
-    local TweenValue = Instance.new("CFrameValue")
-    TweenValue.Value = car:GetPrimaryPartCFrame()
+    local val = Instance.new("CFrameValue")
+    val.Value = car:GetPrimaryPartCFrame()
 
-    TweenValue.Changed:Connect(function()
-        car:PivotTo(TweenValue.Value)
+    val.Changed:Connect(function()
+        car:PivotTo(val.Value)
     end)
 
-    local tween = TweenService:Create(
-        TweenValue,
+    local tween = TweenService:Create(val,
         TweenInfo.new(dist/speed, Enum.EasingStyle.Linear),
         {Value = cf}
     )
 
     tween:Play()
     tween.Completed:Wait()
+end
+
+-- RAYCAST TANAH
+local function getGround(pos)
+    local ray = Ray.new(pos, Vector3.new(0,-500,0))
+    local part, hit = workspace:FindPartOnRay(ray)
+    return hit or pos
+end
+
+-- ALIGN MOBIL
+local function alignCar(car, targetCF)
+    local primary = car.PrimaryPart
+    local look = targetCF.LookVector
+    local newCF = CFrame.new(primary.Position, primary.Position + look)
+    car:PivotTo(newCF)
+end
+
+-- SMART DROP
+local function smartDrop(car, waypoint)
+    local primary = car.PrimaryPart
+    local ground = getGround(waypoint.Position)
+
+    local top = ground + Vector3.new(0,80,0)
+    local slow = ground + Vector3.new(0,10,0)
+    local final = CFrame.new(ground)
+
+    tweenTo(car, CFrame.new(top), _G.speed)
+
+    alignCar(car, waypoint)
+
+    tweenTo(car, CFrame.new(slow), 80)
+    tweenTo(car, final, 40)
+
+    for i = 1,8 do
+        task.wait(0.1)
+        car:PivotTo(car.PrimaryPart.CFrame - Vector3.new(0,1.5,0))
+    end
+
+    task.wait(2)
 end
 
 -- AUTO FARM
@@ -133,23 +158,7 @@ local function autofarm()
             if hum.SeatPart ~= nil then
                 workspace.Gravity = 0
 
-                local primary = car.PrimaryPart
-                local waypoint = workspace.Etc.Waypoint.Waypoint.CFrame
-
-                -- STEP
-                local up = primary.CFrame + Vector3.new(0,120,0)
-                local mid = waypoint + Vector3.new(0,120,0)
-                local slow = waypoint + Vector3.new(0,20,0)
-                local down = waypoint
-
-                tweenTo(car, up, _G.speed)
-                tweenTo(car, mid, _G.speed)
-
-                -- TURUN PELAN 🔥
-                tweenTo(car, slow, 100) -- pelan
-                tweenTo(car, down, 50) -- lebih pelan lagi
-
-                task.wait(2)
+                smartDrop(car, workspace.Etc.Waypoint.Waypoint.CFrame)
 
                 workspace.Gravity = 196
             end
@@ -157,10 +166,10 @@ local function autofarm()
     end
 end
 
--- BUTTONS
+-- BUTTON
 Button.MouseButton1Click:Connect(function()
     _G.run = not _G.run
-    _G.speed = tonumber(SpeedBox.Text) or 300
+    _G.speed = tonumber(SpeedBox.Text) or 250
 
     if _G.run then
         Button.Text = "STOP"
@@ -172,14 +181,7 @@ Button.MouseButton1Click:Connect(function()
     end
 end)
 
-TP.MouseButton1Click:Connect(function()
-    plr.Character.HumanoidRootPart.CFrame = workspace.Etc.Job.Truck.Starter.WorldPivot
-end)
-
-Reset.MouseButton1Click:Connect(function()
-    plr.Character:BreakJoints()
-end)
-
+-- CLOSE
 Close.MouseButton1Click:Connect(function()
     _G.run = false
     ScreenGui:Destroy()
