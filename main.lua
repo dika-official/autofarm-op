@@ -137,20 +137,29 @@ TabFarm:CreateToggle({
                               end)
                           until hum.SeatPart ~= nil
                           
-                      -- JIKA SUDAH DUDUK DI TRUK (MENGGUNAKAN LOGIKA ASLI YANG BERHASIL)
+                      -- JIKA SUDAH DUDUK DI TRUK
                       elseif hum.SeatPart ~= nil then
                           local car = hum.SeatPart.Parent
                           local primary = car.PrimaryPart
-                          local target = workspace.Etc.Waypoint.Waypoint
+                          
+                          -- Gunakan WaitForChild untuk memastikan waypoint benar-benar sudah ada
+                          local target = workspace.Etc.Waypoint:WaitForChild("Waypoint", 3)
+                          if not target then return end
+                          
+                          local prepos = target.Position
                           workspace.Gravity = 0
                           
                           local ts = game:GetService("TweenService")
                           local tv = Instance.new("CFrameValue")
                           tv.Value = car:GetPrimaryPartCFrame()
-                          tv.Changed:Connect(function() car:PivotTo(tv.Value) end)
                           
-                          -- 1. Terbang Ke Atas (1000 Stud)
-                          local UpTween = ts:Create(tv, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {Value = primary.CFrame + Vector3.new(0, 1000, 0)})
+                          -- Simpan koneksi di variabel agar bisa dimatikan nanti (FIX BUG NAIK TURUN)
+                          local pivotConnection = tv.Changed:Connect(function() 
+                              car:PivotTo(tv.Value) 
+                          end)
+                          
+                          -- 1. Terbang Ke Atas Instan (Waktu 0 Detik sesuai script aslimu)
+                          local UpTween = ts:Create(tv, TweenInfo.new(0, Enum.EasingStyle.Linear), {Value = primary.CFrame + Vector3.new(0, 1000, 0)})
                           UpTween:Play()
                           UpTween.Completed:Wait()
                           
@@ -169,10 +178,9 @@ TabFarm:CreateToggle({
                           DownTween:Play()
                           DownTween.Completed:Wait()
                           
-                          -- 4. LOGIKA HITBOX SWEEP (Dari script aslimu)
-                          local prepos = target.Position
+                          -- 4. LOGIKA HITBOX SWEEP
                           repeat task.wait()
-                              if target.Position == prepos then
+                              if target.Parent and target.Position == prepos then
                                   workspace.Gravity = 0
                                   
                                   -- Sweep Maju
@@ -181,7 +189,7 @@ TabFarm:CreateToggle({
                                   Sweep1:Play()
                                   Sweep1.Completed:Wait()
                                   
-                                  if target.Position == prepos then
+                                  if target.Parent and target.Position == prepos then
                                       -- Sweep Bawah (Tembus Tanah)
                                       tv.Value = car:GetPrimaryPartCFrame()
                                       local Sweep2 = ts:Create(tv, TweenInfo.new(1, Enum.EasingStyle.Linear), {Value = target.CFrame - Vector3.new(0, 25, 0)})
@@ -189,17 +197,23 @@ TabFarm:CreateToggle({
                                       Sweep2.Completed:Wait()
                                   end
                                   
-                                  -- Reset fisika sementara biar gak meledak
                                   workspace.Gravity = 200
                                   for _, v in pairs(car:GetDescendants()) do
                                       pcall(function() v.Velocity = Vector3.new(0,0,0) end)
                                   end
                                   task.wait(1.5)
                               end
-                          until prepos ~= target.Position or not _G.AutoTrucker
+                          until not target.Parent or target.Position ~= prepos or not _G.AutoTrucker
                           
-                          -- Kembalikan gravitasi normal untuk loop berikutnya
+                          -- CLEANUP (INI YANG BIKIN TRUK GAK BAKAL BUG LAGI)
+                          pivotConnection:Disconnect()
+                          tv:Destroy()
+                          
+                          -- Kembalikan gravitasi normal
                           workspace.Gravity = 196
+                          
+                          -- Beri jeda agar Waypoint rute berikutnya dirender oleh game
+                          task.wait(1)
                       end
                   end)
                   task.wait()
@@ -232,7 +246,7 @@ TabTele:CreateDropdown({
 
 Rayfield:Notify({
    Title = "DIKA CDID Siap!",
-   Content = "Fisika sweep hitbox asli sudah dikembalikan!",
+   Content = "Memory Leak Fixed! Rute berlanjut mulus.",
    Duration = 5,
    Image = 4483362458,
 })
