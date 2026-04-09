@@ -16,7 +16,7 @@ local Window = Rayfield:CreateWindow({
    ConfigurationSaving = {
       Enabled = false
    },
-   KeySystem = false -- Keyless sesuai permintaan
+   KeySystem = false
 })
 
 -- [[ VARIABLES & FUNCTIONS ]]
@@ -36,8 +36,8 @@ local function getDealerships()
 end
 
 -- [[ TABS ]]
-local TabFarm = Window:CreateTab("Auto Farm", 4483362458) -- Icon Farm
-local TabTele = Window:CreateTab("Teleports", 4483345998) -- Icon Map
+local TabFarm = Window:CreateTab("Auto Farm", 4483362458)
+local TabTele = Window:CreateTab("Teleports", 4483345998)
 
 -- [[ AUTO FISH SECTION ]]
 TabFarm:CreateSection("Fishing Event")
@@ -56,7 +56,7 @@ TabFarm:CreateToggle({
                   end
                   task.wait(1)
                   network.RemoteEvents.Fishing:FireServer("Start")
-                  task.wait(12) -- Kecepatan optimal agar tidak bug
+                  task.wait(12) 
                   if _G.AutoFish then
                       network.RemoteEvents.Fishing:FireServer("Success")
                       network.RemoteEvents.Fishing:FireServer("Reset")
@@ -76,7 +76,6 @@ TabFarm:CreateToggle({
    CurrentValue = false,
    Callback = function(Value)
       _G.AutoTrucker = Value
-      workspace.Gravity = Value and 0 or 196
       
       if Value then
           task.spawn(function()
@@ -86,41 +85,65 @@ TabFarm:CreateToggle({
                       local hum = char.Humanoid
                       
                       if hum.SeatPart == nil then
-                          -- Ambil Job
+                          -- Ambil Job & Spawn Truk
+                          workspace.Gravity = 196
                           network.RemoteEvents.Job:FireServer("Truck")
                           char.HumanoidRootPart.CFrame = workspace.Etc.Job.Truck.Starter.WorldPivot
                           task.wait(0.5)
                           fireproximityprompt(workspace.Etc.Job.Truck.Starter.Prompt)
                           
-                          -- Spawn Truk
                           task.wait(1)
                           char.HumanoidRootPart.CFrame = workspace.Etc.Job.Truck.Spawner.Part.CFrame
                           task.wait(0.5)
                           fireproximityprompt(workspace.Etc.Job.Truck.Spawner.Part.Prompt)
                           
-                          -- Tunggu & Duduk
                           repeat task.wait(0.5) until workspace.Vehicles:FindFirstChild(plr.Name.."sCar")
                           local car = workspace.Vehicles:FindFirstChild(plr.Name.."sCar")
                           car.DriveSeat:Sit(hum)
+                          task.wait(1)
                       else
-                          -- Proses Pengiriman (Speed Tween)
+                          -- Proses Pengiriman (Anti Nyangkut)
                           local car = hum.SeatPart.Parent
                           local target = workspace.Etc.Waypoint.Waypoint
                           local prepos = target.Position
                           
-                          -- Tweening Sangat Cepat
+                          workspace.Gravity = 0 -- Matikan gravitasi biar gak jatuh
+                          
                           local ts = game:GetService("TweenService")
-                          local ti = TweenInfo.new(3, Enum.EasingStyle.Linear) -- Hanya 3 detik ke tujuan!
+                          local cframeVal = Instance.new("CFrameValue")
+                          cframeVal.Value = car:GetPivot()
                           
-                          local tween = ts:Create(car.PrimaryPart, ti, {CFrame = target.CFrame + Vector3.new(0, 50, 0)})
-                          tween:Play()
-                          tween.Completed:Wait()
+                          -- Update posisi mobil dengan aman menggunakan CFrameValue
+                          local conn = cframeVal.Changed:Connect(function()
+                              car:PivotTo(cframeVal.Value)
+                          end)
                           
-                          -- Turun ke bawah untuk selesaikan waypoint
+                          -- 1. Naik ke atas dulu 1000 meter (Hindari gedung)
+                          local tweenUp = ts:Create(cframeVal, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {Value = car:GetPivot() + Vector3.new(0, 1000, 0)})
+                          tweenUp:Play()
+                          tweenUp.Completed:Wait()
+                          
+                          -- 2. Jalan ke waypoint dari atas langit (Speed 3 detik)
+                          local tweenMove = ts:Create(cframeVal, TweenInfo.new(3, Enum.EasingStyle.Linear), {Value = target.CFrame + Vector3.new(0, 1000, 0)})
+                          tweenMove:Play()
+                          tweenMove.Completed:Wait()
+                          
+                          -- 3. Turun pelan ke Waypoint
+                          local tweenDown = ts:Create(cframeVal, TweenInfo.new(1, Enum.EasingStyle.Linear), {Value = target.CFrame + Vector3.new(0, 10, 0)})
+                          tweenDown:Play()
+                          tweenDown.Completed:Wait()
+                          
+                          conn:Disconnect()
+                          cframeVal:Destroy()
+                          
+                          -- Pas-in ke titik
                           car:PivotTo(target.CFrame)
-                          task.wait(1)
+                          for i, v in pairs(car:GetDescendants()) do
+                              if v:IsA("BasePart") then v.Velocity = Vector3.new(0,0,0) end
+                          end
+                          task.wait(1.5)
                           
-                          -- Deteksi Waypoint Baru
+                          -- Tunggu waypoint pindah baru lanjut
                           repeat task.wait(0.1) until target.Position ~= prepos
                       end
                   end)
@@ -156,7 +179,7 @@ TabTele:CreateDropdown({
 
 Rayfield:Notify({
    Title = "DIKA CDID Berhasil!",
-   Content = "Script siap digunakan.",
+   Content = "Script siap digunakan, truk sudah anti nyangkut.",
    Duration = 5,
    Image = 4483362458,
 })
