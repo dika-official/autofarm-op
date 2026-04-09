@@ -137,60 +137,72 @@ TabFarm:CreateToggle({
                               end)
                           until hum.SeatPart ~= nil
                           
-                      -- JIKA SUDAH DUDUK DI TRUK
+                      -- JIKA SUDAH DUDUK DI TRUK (FIX MANTUL)
                       elseif hum.SeatPart ~= nil then
                           local car = hum.SeatPart.Parent
                           local primary = car.PrimaryPart
                           local target = workspace.Etc.Waypoint.Waypoint
+                          local prepos = target.Position
                           workspace.Gravity = 0
                           
-                          local TweenService = game:GetService("TweenService")
-                          local TweenValue = Instance.new("CFrameValue")
-                          TweenValue.Value = car:GetPrimaryPartCFrame()
-                          TweenValue.Changed:Connect(function() car:PivotTo(TweenValue.Value) end)
+                          local ts = game:GetService("TweenService")
+                          local tv = Instance.new("CFrameValue")
+                          tv.Value = car:GetPrimaryPartCFrame()
+                          tv.Changed:Connect(function() car:PivotTo(tv.Value) end)
+                          
+                          -- Simpan rotasi asli truk supaya tidak miring pas teleport
+                          local currentRot = primary.CFrame.Rotation
                           
                           -- 1. Terbang Ke Atas
-                          local UpTween = TweenService:Create(TweenValue, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {Value = primary.CFrame + Vector3.new(0, 1000, 0)})
+                          local UpTween = ts:Create(tv, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {Value = CFrame.new(primary.Position + Vector3.new(0, 1000, 0)) * currentRot})
                           UpTween:Play()
                           UpTween.Completed:Wait()
                           
-                          -- 2. Terbang Mendatar ke Tujuan (Kecepatan Dinamis)
-                          local dist = (primary.Position - target.Position + Vector3.new(0, 1000, 0)).Magnitude
+                          -- 2. Terbang Mendatar ke Tujuan
+                          local dist = (primary.Position - target.Position).Magnitude
                           local fastTime = math.clamp(dist / 650, 0.5, 8) 
                           
-                          TweenValue.Value = car:GetPrimaryPartCFrame()
-                          local MainTween = TweenService:Create(TweenValue, TweenInfo.new(fastTime, Enum.EasingStyle.Linear), {Value = target.CFrame + Vector3.new(0, 1000, 0)})
+                          tv.Value = car:GetPrimaryPartCFrame()
+                          local MainTween = ts:Create(tv, TweenInfo.new(fastTime, Enum.EasingStyle.Linear), {Value = CFrame.new(target.Position + Vector3.new(0, 1000, 0)) * currentRot})
                           MainTween:Play()
                           MainTween.Completed:Wait()
                           
-                          -- 3. Turun ke Posisi Waypoint (Agak ke atas sedikit biar nggak nembus tanah)
-                          TweenValue.Value = car:GetPrimaryPartCFrame()
-                          local DownTween = TweenService:Create(TweenValue, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {Value = target.CFrame + Vector3.new(0, 15, 0)})
+                          -- 3. Turun ke Posisi Waypoint (Diberi jarak aman 15 stud di atas tanah)
+                          tv.Value = car:GetPrimaryPartCFrame()
+                          local DownTween = ts:Create(tv, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {Value = CFrame.new(target.Position + Vector3.new(0, 15, 0)) * currentRot})
                           DownTween:Play()
                           DownTween.Completed:Wait()
                           
-                          -- 4. FIX BUG NGAMBANG: Kembalikan Gravitasi agar truk menyentuh tanah dan terdeteksi
-                          local prepos = target.Position
+                          -- 4. Setel Gravitasi agar jatuh secara natural
                           workspace.Gravity = 196
                           
+                          -- Matikan kecepatan biar truknya nggak glosor/tergelincir
                           for _, v in pairs(car:GetDescendants()) do
                               if v:IsA("BasePart") then
-                                  v.Velocity = Vector3.new(0, -50, 0) -- Paksa sedikit dorongan ke bawah
+                                  v.Velocity = Vector3.new(0, 0, 0)
                                   v.RotVelocity = Vector3.new(0, 0, 0)
                               end
                           end
                           
-                          -- Tunggu sampai Waypoint berpindah (Artinya sudah dapat uang)
+                          -- 5. Menunggu Waypoint Berpindah (Tanpa PivotTo paksa yang bikin mental)
                           local stuckTimer = tick()
-                          repeat task.wait(0.1)
-                              -- Failsafe jika masih nyangkut lebih dari 3 detik
-                              if tick() - stuckTimer > 3 then
-                                  car:PivotTo(target.CFrame) -- Paksa nempel tanah
+                          repeat task.wait(0.2)
+                              -- Hentikan pergerakan terus menerus saat menunggu
+                              for _, v in pairs(car:GetDescendants()) do
+                                  if v:IsA("BasePart") then
+                                      v.Velocity = Vector3.new(0, 0, 0)
+                                  end
+                              end
+                              
+                              -- Failsafe: Jika 5 detik belum dapat uang, turunkan sedikit pakai Tween secara perlahan
+                              if target.Position == prepos and (tick() - stuckTimer) > 5 then
+                                  tv.Value = car:GetPrimaryPartCFrame()
+                                  local AdjustTween = ts:Create(tv, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {Value = CFrame.new(target.Position + Vector3.new(0, 5, 0)) * currentRot})
+                                  AdjustTween:Play()
+                                  AdjustTween.Completed:Wait()
                                   stuckTimer = tick()
                               end
                           until target.Position ~= prepos or not _G.AutoTrucker
-                          
-                          workspace.Gravity = 196
                       end
                   end)
                   task.wait()
@@ -222,8 +234,8 @@ TabTele:CreateDropdown({
 })
 
 Rayfield:Notify({
-   Title = "DIKA CDID Berhasil!",
-   Content = "Script siap digunakan. Bug ngambang sudah di-fix!",
+   Title = "DIKA CDID Siap!",
+   Content = "Fisika truk saat turun sudah distabilkan.",
    Duration = 5,
    Image = 4483362458,
 })
