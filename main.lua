@@ -77,81 +77,125 @@ TabFarm:CreateToggle({
    Callback = function(Value)
       _G.AutoTrucker = Value
       
+      if not Value then
+          workspace.Gravity = 196
+      end
+      
       if Value then
+          if workspace.Map:FindFirstChild("Prop") then
+              workspace.Map.Prop:Destroy()
+          end
+          
           task.spawn(function()
               while _G.AutoTrucker do
                   pcall(function()
                       local char = plr.Character
-                      local hum = char.Humanoid
+                      local hum = char:WaitForChild("Humanoid")
                       
+                      -- JIKA BELUM DUDUK DI TRUK
                       if hum.SeatPart == nil then
-                          -- Ambil Job & Spawn Truk
-                          workspace.Gravity = 196
                           network.RemoteEvents.Job:FireServer("Truck")
+                          task.wait(0.1)
                           char.HumanoidRootPart.CFrame = workspace.Etc.Job.Truck.Starter.WorldPivot
-                          task.wait(0.5)
-                          fireproximityprompt(workspace.Etc.Job.Truck.Starter.Prompt)
-                          
+                          char.HumanoidRootPart.Anchored = true
                           task.wait(1)
+                          char.HumanoidRootPart.Anchored = false
+                          
+                          local prepos = workspace.Etc.Waypoint.Waypoint.Position
+                          repeat task.wait()
+                              fireproximityprompt(workspace.Etc.Job.Truck.Starter.Prompt)
+                          until workspace.Etc.Waypoint.Waypoint.Position ~= prepos
+                          
+                          task.wait(0.5)
                           char.HumanoidRootPart.CFrame = workspace.Etc.Job.Truck.Spawner.Part.CFrame
-                          task.wait(0.5)
-                          fireproximityprompt(workspace.Etc.Job.Truck.Spawner.Part.Prompt)
+                          task.wait(0.8)
                           
-                          repeat task.wait(0.5) until workspace.Vehicles:FindFirstChild(plr.Name.."sCar")
-                          local car = workspace.Vehicles:FindFirstChild(plr.Name.."sCar")
-                          car.DriveSeat:Sit(hum)
-                          task.wait(1)
-                      else
-                          -- Proses Pengiriman (Anti Nyangkut)
+                          local thetruck = nil
+                          repeat task.wait()
+                              if thetruck == nil then
+                                  fireproximityprompt(workspace.Etc.Job.Truck.Spawner.Part.Prompt)
+                                  task.wait(1)
+                                  local carsFolder = workspace.Vehicles:FindFirstChild(plr.Name.."sCar")
+                                  if carsFolder then
+                                      for i,v in pairs(carsFolder:GetDescendants()) do
+                                          if v.Name == "Identifier" and (v.Text == "H 9281 KGK" or v.Text == "BL 7201 EL" or v.Text == "L 9128 TIM") then
+                                              thetruck = v
+                                          end
+                                      end
+                                  end
+                              end
+                          until thetruck ~= nil
+                          
+                          repeat task.wait() until workspace.Vehicles:FindFirstChild(plr.Name.."sCar")
+                          
+                          repeat task.wait()
+                              pcall(function()
+                                  local driveSeat = workspace.Vehicles:FindFirstChild(plr.Name.."sCar"):FindFirstChild("DriveSeat")
+                                  if driveSeat and hum.SeatPart == nil then
+                                      driveSeat:Sit(hum)
+                                  end
+                              end)
+                          until hum.SeatPart ~= nil
+                          
+                      -- JIKA SUDAH DUDUK DI TRUK
+                      elseif hum.SeatPart ~= nil then
                           local car = hum.SeatPart.Parent
+                          local primary = car.PrimaryPart
                           local target = workspace.Etc.Waypoint.Waypoint
+                          workspace.Gravity = 0
+                          
+                          local TweenService = game:GetService("TweenService")
+                          local TweenValue = Instance.new("CFrameValue")
+                          TweenValue.Value = car:GetPrimaryPartCFrame()
+                          TweenValue.Changed:Connect(function() car:PivotTo(TweenValue.Value) end)
+                          
+                          -- 1. Terbang Ke Atas
+                          local UpTween = TweenService:Create(TweenValue, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {Value = primary.CFrame + Vector3.new(0, 1000, 0)})
+                          UpTween:Play()
+                          UpTween.Completed:Wait()
+                          
+                          -- 2. Terbang Mendatar ke Tujuan (Kecepatan Dinamis)
+                          local dist = (primary.Position - target.Position + Vector3.new(0, 1000, 0)).Magnitude
+                          local fastTime = math.clamp(dist / 650, 0.5, 8) 
+                          
+                          TweenValue.Value = car:GetPrimaryPartCFrame()
+                          local MainTween = TweenService:Create(TweenValue, TweenInfo.new(fastTime, Enum.EasingStyle.Linear), {Value = target.CFrame + Vector3.new(0, 1000, 0)})
+                          MainTween:Play()
+                          MainTween.Completed:Wait()
+                          
+                          -- 3. Turun ke Posisi Waypoint (Agak ke atas sedikit biar nggak nembus tanah)
+                          TweenValue.Value = car:GetPrimaryPartCFrame()
+                          local DownTween = TweenService:Create(TweenValue, TweenInfo.new(1.5, Enum.EasingStyle.Linear), {Value = target.CFrame + Vector3.new(0, 15, 0)})
+                          DownTween:Play()
+                          DownTween.Completed:Wait()
+                          
+                          -- 4. FIX BUG NGAMBANG: Kembalikan Gravitasi agar truk menyentuh tanah dan terdeteksi
                           local prepos = target.Position
+                          workspace.Gravity = 196
                           
-                          workspace.Gravity = 0 -- Matikan gravitasi biar gak jatuh
-                          
-                          local ts = game:GetService("TweenService")
-                          local cframeVal = Instance.new("CFrameValue")
-                          cframeVal.Value = car:GetPivot()
-                          
-                          -- Update posisi mobil dengan aman menggunakan CFrameValue
-                          local conn = cframeVal.Changed:Connect(function()
-                              car:PivotTo(cframeVal.Value)
-                          end)
-                          
-                          -- 1. Naik ke atas dulu 1000 meter (Hindari gedung)
-                          local tweenUp = ts:Create(cframeVal, TweenInfo.new(0.5, Enum.EasingStyle.Linear), {Value = car:GetPivot() + Vector3.new(0, 1000, 0)})
-                          tweenUp:Play()
-                          tweenUp.Completed:Wait()
-                          
-                          -- 2. Jalan ke waypoint dari atas langit (Speed 3 detik)
-                          local tweenMove = ts:Create(cframeVal, TweenInfo.new(3, Enum.EasingStyle.Linear), {Value = target.CFrame + Vector3.new(0, 1000, 0)})
-                          tweenMove:Play()
-                          tweenMove.Completed:Wait()
-                          
-                          -- 3. Turun pelan ke Waypoint
-                          local tweenDown = ts:Create(cframeVal, TweenInfo.new(1, Enum.EasingStyle.Linear), {Value = target.CFrame + Vector3.new(0, 10, 0)})
-                          tweenDown:Play()
-                          tweenDown.Completed:Wait()
-                          
-                          conn:Disconnect()
-                          cframeVal:Destroy()
-                          
-                          -- Pas-in ke titik
-                          car:PivotTo(target.CFrame)
-                          for i, v in pairs(car:GetDescendants()) do
-                              if v:IsA("BasePart") then v.Velocity = Vector3.new(0,0,0) end
+                          for _, v in pairs(car:GetDescendants()) do
+                              if v:IsA("BasePart") then
+                                  v.Velocity = Vector3.new(0, -50, 0) -- Paksa sedikit dorongan ke bawah
+                                  v.RotVelocity = Vector3.new(0, 0, 0)
+                              end
                           end
-                          task.wait(1.5)
                           
-                          -- Tunggu waypoint pindah baru lanjut
-                          repeat task.wait(0.1) until target.Position ~= prepos
+                          -- Tunggu sampai Waypoint berpindah (Artinya sudah dapat uang)
+                          local stuckTimer = tick()
+                          repeat task.wait(0.1)
+                              -- Failsafe jika masih nyangkut lebih dari 3 detik
+                              if tick() - stuckTimer > 3 then
+                                  car:PivotTo(target.CFrame) -- Paksa nempel tanah
+                                  stuckTimer = tick()
+                              end
+                          until target.Position ~= prepos or not _G.AutoTrucker
+                          
+                          workspace.Gravity = 196
                       end
                   end)
                   task.wait()
               end
           end)
-      else
-          workspace.Gravity = 196
       end
    end,
 })
@@ -179,7 +223,7 @@ TabTele:CreateDropdown({
 
 Rayfield:Notify({
    Title = "DIKA CDID Berhasil!",
-   Content = "Script siap digunakan, truk sudah anti nyangkut.",
+   Content = "Script siap digunakan. Bug ngambang sudah di-fix!",
    Duration = 5,
    Image = 4483362458,
 })
